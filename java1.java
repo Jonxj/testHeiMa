@@ -1,3 +1,3 @@
 java
 
-System.out.println("hello world")
+i dislike java
