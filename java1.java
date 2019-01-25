@@ -1,3 +1,0 @@
-java
-
-i dislike java
