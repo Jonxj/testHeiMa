@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>文件压缩与解压缩工具</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      padding: 18px;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    p { margin: 0 0 12px; color: #4b5563; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input[type="file"] { max-width: 100%; }
+    input[type="text"] {
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      min-width: 220px;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      max-height: 280px;
+      overflow: auto;
+    }
+    li { margin: 6px 0; }
+    .small { font-size: 12px; color: #6b7280; }
+    .status {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-size: 14px;
+      min-height: 20px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>文件压缩与解压缩工具</h1>
+      <p>纯前端实现：文件不会上传到服务器。可直接打开本地 HTML 使用。</p>
+      <p class="small">提示：首次打开需要网络加载 JSZip 库；可选择文件夹并保留目录结构。</p>
+    </div>
+
+    <div class="card">
+      <h2>1) 压缩文件（生成 ZIP）</h2>
+      <div class="row">
+        <input id="compressFiles" type="file" multiple webkitdirectory directory />
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <label for="zipName">压缩包文件名：</label>
+        <input id="zipName" type="text" value="archive.zip" />
+        <button id="compressBtn">开始压缩并下载</button>
+      </div>
+      <div id="compressStatus" class="status">等待选择文件…</div>
+    </div>
+
+    <div class="card">
+      <h2>2) 解压 ZIP</h2>
+      <div class="row">
+        <input id="zipInput" type="file" accept=".zip,application/zip" />
+        <button id="readZipBtn">读取 ZIP 内容</button>
+      </div>
+      <div id="decompressStatus" class="status">等待选择 ZIP 文件…</div>
+      <ul id="fileList"></ul>
+      <div class="row" style="margin-top:10px;">
+        <button id="downloadAllBtn" disabled>打包并下载全部文件</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const compressFilesEl = document.getElementById('compressFiles');
+    const zipNameEl = document.getElementById('zipName');
+    const compressBtn = document.getElementById('compressBtn');
+    const compressStatus = document.getElementById('compressStatus');
+
+    const zipInputEl = document.getElementById('zipInput');
+    const readZipBtn = document.getElementById('readZipBtn');
+    const decompressStatus = document.getElementById('decompressStatus');
+    const fileListEl = document.getElementById('fileList');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+    let currentZip = null;
+
+    function ensureZipExtension(name) {
+      return name.toLowerCase().endsWith('.zip') ? name : `${name}.zip`;
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    compressBtn.addEventListener('click', async () => {
+      const files = compressFilesEl.files;
+      if (!files || files.length === 0) {
+        compressStatus.textContent = '请先选择要压缩的文件。';
+        return;
+      }
+
+      compressBtn.disabled = true;
+      compressStatus.textContent = `正在压缩 ${files.length} 个文件，请稍候…`;
+
+      try {
+        const zip = new JSZip();
+        for (const file of files) {
+          const path = file.webkitRelativePath && file.webkitRelativePath.trim()
+            ? file.webkitRelativePath
+            : file.name;
+          zip.file(path, file);
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const zipName = ensureZipExtension((zipNameEl.value || 'archive.zip').trim());
+        downloadBlob(blob, zipName);
+
+        compressStatus.textContent = `压缩完成，已下载：${zipName}`;
+      } catch (err) {
+        compressStatus.textContent = `压缩失败：${err.message}`;
+      } finally {
+        compressBtn.disabled = false;
+      }
+    });
+
+    readZipBtn.addEventListener('click', async () => {
+      const file = zipInputEl.files && zipInputEl.files[0];
+      if (!file) {
+        decompressStatus.textContent = '请先选择一个 ZIP 文件。';
+        return;
+      }
+
+      readZipBtn.disabled = true;
+      fileListEl.innerHTML = '';
+      downloadAllBtn.disabled = true;
+      decompressStatus.textContent = '正在读取 ZIP 内容…';
+
+      try {
+        const buffer = await file.arrayBuffer();
+        currentZip = await JSZip.loadAsync(buffer);
+
+        const entries = Object.values(currentZip.files).filter(entry => !entry.dir);
+        if (entries.length === 0) {
+          decompressStatus.textContent = 'ZIP 中没有可解压的文件。';
+          return;
+        }
+
+        entries.forEach(entry => {
+          const li = document.createElement('li');
+          const btn = document.createElement('button');
+          btn.textContent = '下载';
+          btn.addEventListener('click', async () => {
+            const blob = await entry.async('blob');
+            const filename = entry.name.split('/').pop() || entry.name;
+            downloadBlob(blob, filename);
+          });
+
+          li.textContent = `${entry.name} `;
+          li.appendChild(btn);
+          fileListEl.appendChild(li);
+        });
+
+        downloadAllBtn.disabled = false;
+        decompressStatus.textContent = `读取成功，共 ${entries.length} 个文件。`;
+      } catch (err) {
+        currentZip = null;
+        decompressStatus.textContent = `解压失败：${err.message}`;
+      } finally {
+        readZipBtn.disabled = false;
+      }
+    });
+
+    downloadAllBtn.addEventListener('click', async () => {
+      if (!currentZip) return;
+      downloadAllBtn.disabled = true;
+      decompressStatus.textContent = '正在打包全部文件…';
+
+      try {
+        const entries = Object.values(currentZip.files).filter(entry => !entry.dir);
+        const bundleZip = new JSZip();
+        for (const entry of entries) {
+          const blob = await entry.async('blob');
+          bundleZip.file(entry.name, blob);
+        }
+        const output = await bundleZip.generateAsync({ type: 'blob' });
+        downloadBlob(output, 'extracted_files.zip');
+        decompressStatus.textContent = `打包下载完成，共 ${entries.length} 个文件。`;
+      } catch (err) {
+        decompressStatus.textContent = `批量下载失败：${err.message}`;
+      } finally {
+        downloadAllBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
